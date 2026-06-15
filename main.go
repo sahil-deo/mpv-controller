@@ -227,7 +227,8 @@ func playQuickMusic(cmdargs []string) {
 }
 
 func help() {
-	fmt.Println(`mpv-cli — manage and play music links via mpv
+	fmt.Println(`
+	mpv-cli — manage and play music links via mpv
 
 	Usage:
 	mpv-cli [options]
@@ -249,7 +250,8 @@ func help() {
 	mpv-cli -play 3 -loop -shuffle
 	mpv-cli -quickplay "https://youtube.com/watch?v=..." -loop
 	mpv-cli -list
-	mpv-cli -remove 2`)
+	mpv-cli -remove 2
+	`)
 }
 func getdb() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("db/data.db"), &gorm.Config{})
