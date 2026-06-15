@@ -59,7 +59,16 @@ func main() {
 				log.Fatal(result.Error)
 			}
 
-			log.Println(result.RowsAffected)
+			log.Println("Count: ", result.RowsAffected)
+
+			if result.RowsAffected == 0 {
+				fmt.Println("0 entires.\nAdd Music first.")
+				break
+			}
+
+			for i := 0; i < len(music); i++ {
+				fmt.Println(music[i].ID, music[i].Name)
+			}
 
 			var id int
 			fmt.Println("Enter ID to play: ")
@@ -121,6 +130,7 @@ func main() {
 
 		case 3:
 			fmt.Println("Remove music")
+
 		case 4:
 			fmt.Println("Exiting...")
 			return
