@@ -5,138 +5,198 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
+	"syscall"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type Music struct {
-	ID         int `gorm:"primarykey"`
-	Name       string
-	Link       string
-	IsPlaylist bool
+	ID   int `gorm:"primarykey"`
+	Name string
+	Link string
 }
 
 func main() {
 
+	db := getdb()
+	err := db.AutoMigrate(&Music{})
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	if len(os.Args) < 2 {
+		return
+	}
+
+	args := os.Args[1:]
+
+	var tree = make(map[string]int)
+
+	for i, arg := range args {
+		switch arg {
+		case "-a", "-add":
+			tree["ADD"] = i
+
+		case "-r", "-remove":
+			tree["REMOVE"] = i
+
+		case "-p", "-play":
+			tree["PLAY"] = i
+
+		case "-l", "-ls", "-list":
+			tree["LIST"] = i
+
+		case "-loop":
+			tree["LOOP"] = i
+
+		case "-n", "-name":
+			tree["NAME"] = i
+
+		case "-lk", "-link":
+			tree["LINK"] = i
+
+		case "-sh", "-shuffle":
+			tree["SHUFFLE"] = i
+		case "-h", "-help":
+			tree["HELP"] = i
+		}
+
+	}
+
+	// precedence:
+	// list -> play -> add -> remove -> help
+
+	if _, ok := tree["LIST"]; ok {
+
+		listMusic()
+
+	} else if val, ok := tree["PLAY"]; ok {
+		id, err := strconv.Atoi(args[val+1])
+
+		if err != nil {
+			log.Fatal("Error parsing id", err)
+			return
+		}
+
+		var cmdargs []string = []string{"mpv"}
+		if _, ok := tree["LOOP"]; ok {
+			cmdargs = append(cmdargs, "--loop", "--loop-playlist")
+		}
+		if _, ok := tree["SHUFFLE"]; ok {
+			cmdargs = append(cmdargs, "--shuffle")
+		}
+
+		playMusic(id, cmdargs)
+
+	} else if _, ok := tree["ADD"]; ok {
+
+		var name, link string
+
+		if i, ok := tree["NAME"]; ok {
+			name = args[i+1]
+		} else {
+			log.Fatal("name not provided\nUse -h or -help to see usage")
+			return
+		}
+
+		if i, ok := tree["LINK"]; ok {
+			link = args[i+1]
+		} else {
+			log.Fatal("link not provided\nUse -h or -help to see usage")
+			return
+		}
+
+		addMusic(name, link)
+
+	} else if val, ok := tree["REMOVE"]; ok {
+
+		id, err := strconv.Atoi(args[val+1])
+
+		if err != nil {
+			log.Fatal("Error parsing id", err)
+			return
+		}
+		removeMusic(id)
+
+	} else if _, ok := tree["HELP"]; ok {
+
+		help()
+
+	} else {
+		fmt.Println("Invalid options, use -h or -help to check usage")
+		return
+	}
+}
+
+func listMusic() {
+	db := getdb()
+
+	var entries []Music
+	result := db.Find(&entries)
+
+	if len(entries) == 0 {
+		log.Fatal("No music in db.")
+		return
+	}
+
+	log.Println("Total Count:", result.RowsAffected)
+
+	for _, entry := range entries {
+		log.Println(entry.ID, entry.Name)
+	}
+}
+
+func playMusic(id int, cmdargs []string) {
+	db := getdb()
+
+	var entry Music
+	db.First(&entry, "id=?", id)
+
+	link := entry.Link
+	cmdargs = append(cmdargs, link)
+	env := os.Environ()
+
+	// cmd := exec.Command("mpv", cmdargs, link)
+	mpv, err := exec.LookPath("mpv")
+
+	if err != nil {
+		log.Fatal("Enable to find mpv path", err)
+	}
+
+	syscall.Exec(mpv, cmdargs, env)
+
+}
+
+func addMusic(name, link string) {
+	db := getdb()
+
+	var entry Music
+	entry.Name = name
+	entry.Link = link
+
+	db.Create(&entry)
+
+	log.Println("Music Added: ", entry.ID, entry.Name, entry.Link)
+}
+
+func removeMusic(id int) {
+	db := getdb()
+	db.Delete(&Music{}, id)
+}
+
+func help() {
+
+}
+
+func getdb() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("db/data.db"), &gorm.Config{})
 
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Fatal("Error opening db", err)
 	}
-
-	err = db.AutoMigrate(&Music{})
-
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	for {
-
-		fmt.Println("\nWelcome mpv control\n")
-
-		fmt.Println("Options:")
-
-		fmt.Println("1. Play music.")
-		fmt.Println("2. Add music.")
-		fmt.Println("3. Remove music.")
-		fmt.Println("4. Exit music")
-
-		var entry int
-		fmt.Scan(&entry)
-
-		switch entry {
-
-		case 1:
-			fmt.Println("Play music")
-
-			var music []Music
-			result := db.Find(&music)
-
-			if result.Error != nil {
-				log.Fatal(result.Error)
-			}
-
-			log.Println("Count: ", result.RowsAffected)
-
-			if result.RowsAffected == 0 {
-				fmt.Println("0 entires.\nAdd Music first.")
-				break
-			}
-
-			for i := 0; i < len(music); i++ {
-				fmt.Println(music[i].ID, music[i].Name)
-			}
-
-			var id int
-			fmt.Println("Enter ID to play: ")
-			fmt.Scan(&id)
-
-			var musicRow Music
-			db.First(&musicRow, "id=?", id)
-
-			var loop string
-			if musicRow.IsPlaylist {
-				loop = "--loop-playlist"
-			} else {
-				loop = "--loop"
-			}
-
-			cmd := exec.Command("mpv", "--no-video", "--shuffle", loop, musicRow.Link)
-			fmt.Println("Executing: ", cmd.Args)
-
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-
-			err := cmd.Run()
-			if err != nil {
-				fmt.Println("mpv exited with error:", err)
-			}
-
-		case 2:
-			fmt.Println("Add music")
-			var name, link, isPlaylist string
-			var music Music
-			fmt.Println("Name: ")
-			fmt.Scan(&name)
-			fmt.Println("Link: ")
-			fmt.Scan(&link)
-			fmt.Println("Playlist(P)/Single(S)[Default=P]: ")
-			fmt.Scan(&isPlaylist)
-
-			if isPlaylist == "S" || isPlaylist == "s" {
-				fmt.Println("Single")
-
-				music.Name = name
-				music.Link = link
-				music.IsPlaylist = false
-			} else {
-				fmt.Println("Playlist")
-
-				music.Name = name
-				music.Link = link
-				music.IsPlaylist = true
-			}
-
-			result := db.Create(&music)
-			if result.Error != nil {
-				log.Fatal(result.Error)
-				return
-			}
-
-			log.Println("Inserted id: ", music.ID)
-
-		case 3:
-			fmt.Println("Remove music")
-
-		case 4:
-			fmt.Println("Exiting...")
-			return
-		default:
-			fmt.Println("Invalid Option")
-		}
-	}
+	return db
 }
