@@ -29,6 +29,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
+		help()
 		return
 	}
 
@@ -61,14 +62,21 @@ func main() {
 
 		case "-sh", "-shuffle":
 			tree["SHUFFLE"] = i
+
 		case "-h", "-help":
 			tree["HELP"] = i
+
+		case "-q", "-quickplay":
+			tree["QUICK"] = i
+
+		case "-d", "-default":
+			tree["SETDEFAULT"] = i
 		}
 
 	}
 
 	// precedence:
-	// list -> play -> add -> remove -> help
+	// list -> play -> add -> remove -> quickplay -> default -> help
 
 	if _, ok := tree["LIST"]; ok {
 
@@ -121,6 +129,23 @@ func main() {
 			return
 		}
 		removeMusic(id)
+
+	} else if val, ok := tree["QUICK"]; ok {
+
+		link := args[val+1]
+
+		var cmdargs []string = []string{"mpv", "--no-video"}
+
+		if _, ok := tree["LOOP"]; ok {
+			cmdargs = append(cmdargs, "--loop", "--loop-playlist")
+		}
+		if _, ok := tree["SHUFFLE"]; ok {
+			cmdargs = append(cmdargs, "--shuffle")
+		}
+
+		cmdargs = append(cmdargs, link)
+
+		playQuickMusic(cmdargs)
 
 	} else if _, ok := tree["HELP"]; ok {
 
@@ -188,10 +213,44 @@ func removeMusic(id int) {
 	db.Delete(&Music{}, id)
 }
 
-func help() {
+func playQuickMusic(cmdargs []string) {
+
+	env := os.Environ()
+	mpv, err := exec.LookPath("mpv")
+
+	if err != nil {
+		log.Fatal("Enable to find mpv path", err)
+	}
+
+	syscall.Exec(mpv, cmdargs, env)
 
 }
 
+func help() {
+	fmt.Println(`mpv-cli — manage and play music links via mpv
+
+	Usage:
+	mpv-cli [options]
+
+	Options:
+	-a,  -add              Add a new music entry
+	-r,  -remove <id>      Remove music entry by ID
+	-p,  -play <id>        Play music entry by ID
+	-l,  -ls, -list        List all music entries
+	-q,  -quickplay <link> Play a link directly without saving
+	-n,  -name <name>      Name of the music (used with -add)
+	-lk, -link <link>      Link of the music (used with -add)
+	-loop                  Loop the track/playlist
+	-sh, -shuffle          Shuffle playback
+	-h,  -help             Show this help message
+
+	Examples:
+	mpv-cli -add -name "Lofi Mix" -link "https://youtube.com/watch?v=..."
+	mpv-cli -play 3 -loop -shuffle
+	mpv-cli -quickplay "https://youtube.com/watch?v=..." -loop
+	mpv-cli -list
+	mpv-cli -remove 2`)
+}
 func getdb() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("db/data.db"), &gorm.Config{})
 
