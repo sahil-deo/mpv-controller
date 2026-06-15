@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"syscall"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -183,7 +182,6 @@ func playMusic(id int, cmdargs []string) {
 
 	link := entry.Link
 	cmdargs = append(cmdargs, link)
-	env := os.Environ()
 
 	// cmd := exec.Command("mpv", cmdargs, link)
 	mpv, err := exec.LookPath("mpv")
@@ -192,7 +190,7 @@ func playMusic(id int, cmdargs []string) {
 		log.Fatal("Enable to find mpv path", err)
 	}
 
-	syscall.Exec(mpv, cmdargs, env)
+	execMpv(mpv, cmdargs)
 
 }
 
@@ -215,14 +213,13 @@ func removeMusic(id int) {
 
 func playQuickMusic(cmdargs []string) {
 
-	env := os.Environ()
 	mpv, err := exec.LookPath("mpv")
 
 	if err != nil {
 		log.Fatal("Enable to find mpv path", err)
 	}
 
-	syscall.Exec(mpv, cmdargs, env)
+	execMpv(mpv, cmdargs)
 
 }
 
@@ -254,7 +251,7 @@ func help() {
 	`)
 }
 func getdb() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("db/data.db"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
 
 	if err != nil {
 		log.Fatal("Error opening db", err)
