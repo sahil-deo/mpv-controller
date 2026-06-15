@@ -82,7 +82,7 @@ func main() {
 			return
 		}
 
-		var cmdargs []string = []string{"mpv"}
+		var cmdargs []string = []string{"mpv", "--no-video"}
 		if _, ok := tree["LOOP"]; ok {
 			cmdargs = append(cmdargs, "--loop", "--loop-playlist")
 		}
