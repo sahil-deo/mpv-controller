@@ -66,7 +66,7 @@ func main() {
 			fmt.Scan(&id)
 
 			var musicRow Music
-			db.First(&music, "id=?", id)
+			db.First(&musicRow, "id=?", id)
 
 			var loop string
 			if musicRow.IsPlaylist {
