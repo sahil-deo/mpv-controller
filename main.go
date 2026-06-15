@@ -84,8 +84,8 @@ func main() {
 				loop = "--loop"
 			}
 
-			fmt.Println("Executing: mpv --no-video", "--shuffle", loop, musicRow.Link)
 			cmd := exec.Command("mpv", "--no-video", "--shuffle", loop, musicRow.Link)
+			fmt.Println("Executing: ", cmd.Args)
 
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
