@@ -4,17 +4,16 @@ A simple command-line tool to manage and play music/video links via [mpv](https:
 
 ## Features
 
-- Store music/video links in a local SQLite database (`db/data.db`)
+- Stores music/video links in a SQLite database
 - Play saved entries by ID, with optional loop and shuffle
 - Quick-play any link directly without saving it to the database
-- List and remove saved entries
+- Works on Linux, macOS, and Windows
 
 ## Requirements
 
 - [Go](https://go.dev/) 1.21+
 - [mpv](https://mpv.io/) installed and available in `$PATH`
 - SQLite (via `gorm.io/driver/sqlite`, no separate install needed — it's a CGo/pure-Go driver bundled as a dependency)
-- **Linux or macOS only** — see [Platform support](#platform-support) below
 
 ## Installing mpv
 
@@ -47,52 +46,52 @@ or via [Chocolatey](https://chocolatey.org/):
 choco install mpv
 ```
 
-> **Note:** mpv itself installs fine on Windows, but this program **will not run on Windows** — see [Platform support](#platform-support).
+## Installation
 
-## Running
+### Option 1: Download a prebuilt binary (recommended)
 
-Clone or copy the project, then from the project directory:
+Prebuilt binaries for Linux, macOS, and Windows are available on the [Releases](../../releases) page. Download the one for your platform, then:
 
+**Linux / macOS:**
 ```bash
-mkdir -p db
-go run .
+chmod +x mpv-cli
+./mpv-cli -help
 ```
 
-The program expects a `db/` directory in your current working directory (it opens `db/data.db`, creating it on first run via GORM's `AutoMigrate`). Run it from the project directory so `db/` is found.
+**Windows:**
+Just run `mpv-cli.exe` from PowerShell or Command Prompt.
+
+To run it from anywhere, see [Adding to `$PATH`](#adding-to-path) below.
+
+### Option 2: Build from source
+
+Requires [Go](https://go.dev/) 1.21+.
 
 ```bash
-go run . -add -name "Lofi Mix" -link "https://music.youtube.com/playlist?list=PL..."
-go run . -list
-go run . -play 1
-```
-
-## Building
-
-Once you're happy with it, build a standalone binary:
-
-```bash
+git clone <repo-url>
+cd mpv-cli
 go build -o mpv-cli .
 ```
 
-This produces a binary named `mpv-cli` in the current directory. It still expects a `db/` directory in the current working directory (same as above).
+On Windows this produces `mpv-cli.exe`.
 
-## Platform support
 
-This program uses `syscall.Exec` to replace its own process image with mpv (so mpv inherits the terminal directly). `syscall.Exec` wraps the `execve` system call, which **only exists on Unix-like systems**.
+## Running
 
-| OS | Supported |
-|----|-----------|
-| Linux | ✅ Yes |
-| macOS | ✅ Yes |
-| Windows | ❌ No — `syscall.Exec` is not implemented on Windows and the exec call will fail |
 
-To support Windows, the `-play`/`-quickplay` code paths would need to be rewritten using `os/exec` (`exec.Command(...).Run()`) instead of `syscall.Exec`.
+```bash
+./mpv-cli -add -name "Lofi Mix" -link "https://music.youtube.com/playlist?list=PL..."
+./mpv-cli -list
+./mpv-cli -play 1
+```
 
 ## Adding to `$PATH`
 
 To run `mpv-cli` from anywhere, install the binary somewhere in your `$PATH`.
 
-### Option 1: Use `go install`
+### Linux / macOS
+
+**Using `go install`** (if built from source):
 
 ```bash
 go install .
@@ -111,44 +110,23 @@ Then reload your shell config:
 source ~/.bashrc   # or ~/.zshrc
 ```
 
-### Option 2: Move the built binary manually
+**Moving a binary manually** (prebuilt or self-built):
 
 ```bash
-go build -o mpv-cli .
 sudo mv mpv-cli /usr/local/bin/
 ```
 
-`/usr/local/bin` is in `$PATH` by default on most Linux/macOS systems, so no further configuration is needed.
+`/usr/local/bin` is in `$PATH` by default on most Linux/macOS systems.
 
-### Fixing the database path for `$PATH` usage
+### Windows
 
-As written, `mpv-cli` looks for `db/data.db` relative to the current working directory. So running it from `$PATH` (i.e. from any directory) will try to create/open `db/` wherever you happen to be.
+Move `mpv-cli.exe` to a folder of your choice (e.g. `C:\Tools\`), then add that folder to your `PATH`:
 
-To fix this, edit `getdb()` in `main.go` to use a fixed location in your home directory:
-
-```go
-func getdb() *gorm.DB {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal("Error finding home directory", err)
-	}
-
-	dbDir := filepath.Join(home, ".local", "share", "mpv-cli")
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		log.Fatal("Error creating db directory", err)
-	}
-
-	dbPath := filepath.Join(dbDir, "data.db")
-
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		log.Fatal("Error opening db", err)
-	}
-	return db
-}
-```
-
-Add `"path/filepath"` to your imports, then rebuild (`go build -o mpv-cli .`). This stores the database at `~/.local/share/mpv-cli/data.db`, so `mpv-cli` works correctly from any directory.
+1. Search "Environment Variables" in the Start menu → "Edit the system environment variables"
+2. Click "Environment Variables..."
+3. Under "User variables", select `Path` → "Edit" → "New"
+4. Add the folder path (e.g. `C:\Tools`)
+5. Click OK on all dialogs, then open a new terminal
 
 ## Usage
 
@@ -212,14 +190,17 @@ mpv-cli -help
 ```
 Running `mpv-cli` with no arguments also shows help.
 
-## How it works
+## Project structure
 
-- Saved entries are stored as `(ID, Name, Link)` rows in the `music` table of `db/data.db` (auto-migrated on startup via GORM).
-- `-play` and `-quickplay` build an `mpv` command (`mpv --no-video [--loop-playlist] [--shuffle] <link>`) and replace the current process with it via `syscall.Exec`, so mpv runs directly in your terminal with full TTY control (playback controls, progress bar, etc. work normally).
-- `--loop-playlist` is used for `-play` (suited to playlist links); `--loop` (single-file loop) is used for `-quickplay`.
+```
+.
+├── main.go              # CLI parsing, DB models, command logic
+├── exec_unix.go         # //go:build !windows — syscall.Exec implementation
+└── exec_windows.go      # //go:build windows — os/exec implementation
+```
 
 ## Troubleshooting
 
-- **`Enable to find mpv path` error**: mpv isn't installed or isn't in `$PATH`. Install it via your package manager (e.g. `sudo pacman -S mpv`, `sudo apt install mpv`, `brew install mpv`).
-- **`Error opening db`**: ensure a `db/` directory exists in the current working directory (or update `getdb()` as described above for a fixed path).
+- **`Enable to find mpv path` error**: mpv isn't installed or isn't in `$PATH`. Install it via your package manager (see [Installing mpv](#installing-mpv)).
+- **`Error opening db`**: check that `~/.local/share/mpv-cli/` exists and is writable.
 - **"No music in db."**: the `music` table is empty — add an entry with `-add` first.

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 
 	"gorm.io/driver/sqlite"
@@ -251,8 +252,19 @@ func help() {
 	`)
 }
 func getdb() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal("Error finding home directory", err)
+	}
 
+	dbDir := filepath.Join(home, ".local", "share", "mpv-cli")
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		log.Fatal("Error creating db directory", err)
+	}
+
+	dbPath := filepath.Join(dbDir, "data.db")
+
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Error opening db", err)
 	}
