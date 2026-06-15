@@ -77,15 +77,15 @@ func main() {
 			var musicRow Music
 			db.First(&musicRow, "id=?", id)
 
-			var loop string
+			var options string
 			if musicRow.IsPlaylist {
-				loop = "--loop-playlist"
+				options = "--shuffle --loop-playlist"
 			} else {
-				loop = "--loop"
+				options = "--loop"
 			}
 
-			fmt.Println("Executing: mpv --no-video", loop, musicRow.Link)
-			cmd := exec.Command("mpv", "--no-video", loop, musicRow.Link)
+			fmt.Println("Executing: mpv --no-video", options, musicRow.Link)
+			cmd := exec.Command("mpv", "--no-video", options, musicRow.Link)
 
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
